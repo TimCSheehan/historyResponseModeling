@@ -223,8 +223,14 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
                 'fit_fun'   - fit_mdl,sliding_bias
     """
 
+    if resp.ndim==1:
+        resp = np.expand_dims(resp,0)
+        E = np.expand_dims(E,0)
     E_rad = E*d2r # now [-pi,pi]
     stim_rad = stim*d2r*2-pi #[-pi,pi]
+
+    n_stim = resp.shape[0]
+        
     resp_corrected = np.zeros_like(resp)
 
     if n_subj: # run per subject mode...
@@ -247,7 +253,8 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
         
         rss_fit = 1
         if c_fun=='poly':
-            for i in range(E.shape[0]):
+            assert 0, 'not setup right!'
+            for i in range(n_stim):
                 pfit = np.polyfit(stim,E[i],n_param) # Fix, want many_sine_cos
                 fit_mdl = lambda stim: np.poly1d(pfit)(stim)
                 rss_fit = 0
@@ -267,7 +274,7 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
 
         if rss_fit :
             correction_fun = SDF.rss_fun(this_fun)
-            for i in range(E_rad.shape[0]): # fit and correct seperately for each simulation
+            for i in range(n_stim): # fit and correct seperately for each simulation
                 this_fit = scipy.optimize.minimize(correction_fun,x0,(stim_rad,E_rad[i])) 
                 fit_mdl = lambda stim: this_fun(this_fit.x,stim)*r2d
                 mdl_pred = fit_mdl(stim_rad)
@@ -282,11 +289,10 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
     elif mode=='E':
         return stim,resp,E_corrected
     elif mode=='fit_fun':
-        sliding_bias = np.zeros((5,n_bns)) # history indpendent, [E (stim, resp, none)], fit fun,,,
-        sliding_bias[0] = SDF.do_bining(bns+90,overlap,stim,E[2])
-        for i in range(3):
+        sliding_bias = np.zeros((n_stim+1,n_bns)) # history indpendent, [E (stim, resp, none)], fit fun,,,
+        sliding_bias[0] = SDF.do_bining(bns+90,overlap,stim,E[-1])
+        for i in range(n_stim):
             sliding_bias[i+1] = SDF.do_bining(bns+90,overlap,stim,E_corrected[i])
-        sliding_bias
         return fit_mdl,sliding_bias
 
 
@@ -304,6 +310,10 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
     labs   | labels corresponding to rows of resp/E
     fit_typ| options: DoVM (default), DoG.
     """
+    if resp.ndim==1:
+        resp = np.expand_dims(resp,0)
+    if E.ndim==1:
+        E = np.expand_dims(E,0)
     
     n_stim_total = len(stim)
     n_gen = resp.shape[0]
@@ -343,9 +353,11 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
             
             for si in range(n_subj):
                 st_ind,end_ind = si*n_trial,(si+1)*n_trial
+                
                 if n_subj ==1:
                     st_ind,end_ind = 0,len(stim)
-                
+                    
+                inds = (np.arange(len(stim_use))>=st_ind)&(np.arange(len(stim_use))<end_ind)
                 if get_vis:
                     sd_bias_all[nbi,0,i,si] = SDF.do_bining(bns,overlap,d_ori[st_ind:end_ind],
                                                         E_use[i,st_ind:end_ind]*d2r*2,'circ_mean')/d2r/2
@@ -394,7 +406,7 @@ def fit_history_fun(x,y,typ='DoVM',want_full=0,x2=None):
         jointFit=1
 
     assert np.all(np.abs(x)<=pi) and np.any(np.abs(x)>pi/2), 'x expected to range from [-pi,pi]'
-    assert ~np.any(np.abs(y)>=90) and np.any(np.abs(y)>(pi)), 'y expecteed to be in range [-90,90]'
+    assert ~np.any(np.abs(y)>90) and np.any(np.abs(y)>(pi)), 'y expecteed to be in range [-90,90]'
 
     if typ == 'DoVM':
 
