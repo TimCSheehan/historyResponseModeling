@@ -227,3 +227,27 @@ def d_plot(s=0,yl=0,xl=-180):
     if yl:
         plt.plot([0,0],(-yl,yl),'b--')
         plt.ylim((-yl,yl))            
+        
+def circ_corr(x, y):
+    """ calculate correlation coefficient between two circular variables
+    Using Fisher & Lee circular correlation formula (code adapted from Ed Vul)
+    x, y are both in radians [0,2pi]
+    
+    """
+    if np.any(x>90): # assume both variable range from [0,180]
+        x = x/90*pi
+        y = y/90*pi
+    if np.any(x<0) or np.any(x>2*pi) or np.any(y<0) or np.any(y>2*pi):
+        raise ValueError('x and y values must be between 0-2pi')
+    n = np.size(x);
+    assert(np.size(y)==n)
+    A = np.sum(np.cos(x)*np.cos(y));
+    B = np.sum(np.sin(x)*np.sin(y));
+    C = np.sum(np.cos(x)*np.sin(y));
+    D = np.sum(np.sin(x)*np.cos(y));
+    E = np.sum(np.cos(2*x));
+    Fl = np.sum(np.sin(2*x));
+    G = np.sum(np.cos(2*y));
+    H = np.sum(np.sin(2*y));
+    corr_coef = 4*(A*B-C*D) / np.sqrt((np.power(n,2) - np.power(E,2) - np.power(Fl,2))*(np.power(n,2) - np.power(G,2) - np.power(H,2)));
+    return corr_coef

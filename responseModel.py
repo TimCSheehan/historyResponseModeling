@@ -205,7 +205,7 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     return stim,resp_all_cb,E_all
 
 
-def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_trial=0):
+def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_trial=0,subjs=None):
     """
     Corrects cardinal or any other circular response bias. 
     
@@ -228,9 +228,12 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
         E = np.expand_dims(E,0)
     E_rad = E*d2r # now [-pi,pi]
     stim_rad = stim*d2r*2-pi #[-pi,pi]
+    if subjs is not None:
+        u_subj = np.unique(subjs)
+        n_subj = len(u_subj)
+        n_trial = 1
 
-    n_stim = resp.shape[0]
-        
+    n_stim,n_stim_total = resp.shape
     resp_corrected = np.zeros_like(resp)
 
     if n_subj: # run per subject mode...
@@ -238,17 +241,23 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
         # assert mode != 'fit_fun', 'Not setup'
         fit_mdl = []
         for si in range(n_subj):
-            st_ind,end_ind = si*n_trial,(si+1)*n_trial  
-            _,c_resp,c_E,this_mdl = correct_cb(stim[st_ind:end_ind],resp[:,st_ind:end_ind],E[:,st_ind:end_ind],
+            if subjs is not None:
+                inds = subjs==u_subj[si]
+            else:
+                st_ind,end_ind = si*n_trial,(si+1)*n_trial  
+                inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
+            
+            _,c_resp,c_E,this_mdl = correct_cb(stim[inds],resp[:,inds],E[:,inds],
                 c_fun=c_fun,n_param=n_param,mode='all',n_subj=0)
-            resp_corrected[:,st_ind:end_ind] = c_resp # correct resp for given subj...
+            resp_corrected[:,inds] = c_resp # correct resp for given subj...
             fit_mdl.append(this_mdl)
 
         # clip
-        stim = stim[:end_ind]
-        resp = resp[:,:end_ind]
-        resp_corrected = resp_corrected[:,:end_ind]
-        E = E[:,:end_ind]
+        if subjs is None:
+            stim = stim[:end_ind]
+            resp = resp[:,:end_ind]
+            resp_corrected = resp_corrected[:,:end_ind]
+            E = E[:,:end_ind]
     else:
         
         rss_fit = 1
@@ -296,8 +305,103 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
         return fit_mdl,sliding_bias
 
 
+# def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,labs = None,
+#     fit_typ = 'DoVM',do_boot=0):
+#     """
+#     Returns parameterized estimates of bias from stim and resp/E. 
+
+#     stim   | [0, 180]
+#     resp   | [0, 180] 
+#     nb_run | list like, 0- shuffle
+#     n_subj | for power analysis. If 1 just do one fit of all data...
+#     n_trial| per subject
+#     get_vis| return sliding avg bias 
+#     labs   | labels corresponding to rows of resp/E
+#     fit_typ| options: DoVM (default), DoG.
+#     """
+#     if resp.ndim==1:
+#         resp = np.expand_dims(resp,0)
+#     if E.ndim==1:
+#         E = np.expand_dims(E,0)
+    
+#     n_stim_total = len(stim)
+#     n_gen = resp.shape[0]
+#     if labs is None:
+#         if n_gen==3:
+#             labs = ('Stim SD','Resp SD','No SD')
+#         elif n_gen==4:
+#             labs = ('Stim SD','Resp SD','StimResp SD','No SD')
+#     else:
+#         assert n_gen==len(labs),'invalid labs'
+
+#     if do_boot==0: assert n_stim_total >= (n_subj*n_trial), 'not enough trials'
+
+#     n_nb = len(nb_run)
+#     sd_bias_all = np.zeros((n_nb,2,n_gen,n_subj,n_bns)) # (sort stim/resp), (gen stim/resp/neither)
+#     fits_all_struct = pd.DataFrame()
+    
+#     # iterate over different nb
+#     for nbi,nb in enumerate(nb_run): 
+#         if nb==0:
+#             new_order = np.random.choice(n_stim_total,n_stim_total)
+#             stim_use = stim[new_order]
+#             resp_use = resp[:,new_order]
+#             E_use = E[:,new_order]
+#             nb_use = -1
+#         else:
+#             stim_use=stim
+#             resp_use=resp
+#             E_use=E
+#             nb_use=nb
+        
+#         d_ori = SDF.get_nb(nb_use,stim_use,1,ori_wrap)
+        
+#         for i in range(n_gen): # stim bias/ resp bias/ none .. etc.
+#             d_resp = ori_wrap(SDF.get_nb(nb_use,resp_use[i],0)-stim_use)
+            
+#             for si in range(n_subj):
+#                 if do_boot:
+#                     inds = np.random.choice(n_stim_total,n_trial,0)
+#                 else:
+#                     st_ind,end_ind = si*n_trial,(si+1)*n_trial
+#                     if n_subj ==1:
+#                         st_ind,end_ind = 0,len(stim)
+#                     inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
+                
+#                 if get_vis:
+#                     sd_bias_all[nbi,0,i,si] = SDF.do_bining(bns,overlap,d_ori[inds],
+#                                                         E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
+#                     sd_bias_all[nbi,1,i,si] = SDF.do_bining(bns,overlap,d_resp[inds],
+#                                                         E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
+
+#                 fit_ori = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
+#                 fit_resp = fit_history_fun(d_resp[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
+
+#                 fit_joint = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ,
+#                     x2=d_resp[inds]*d2r*2)
+
+#                 dicts = []
+#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_ori','amp':fit_ori.x[0]
+#                               ,'width':fit_ori.x[1],'success':fit_ori.success})
+#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_resp','amp':fit_resp.x[0],
+#                               'width':fit_resp.x[1],'success':fit_resp.success})
+#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_ori','amp':fit_joint.x[0],
+#                               'width':fit_joint.x[1],
+#                               'success':fit_resp.success})
+#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_resp','amp':fit_joint.x[2],
+#                               'width':fit_joint.x[3],
+#                               'success':fit_resp.success})                 
+#                 for s in dicts:
+#                     fits_all_struct = fits_all_struct.append(s,ignore_index=1)
+
+#     if get_vis:
+#         return fits_all_struct, sd_bias_all
+#     else:
+#         return fits_all_struct
+    
+    
 def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,labs = None,
-    fit_typ = 'DoVM'):
+    fit_typ = 'DoVM',do_boot=0,subjs=None):
     """
     Returns parameterized estimates of bias from stim and resp/E. 
 
@@ -325,63 +429,74 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
     else:
         assert n_gen==len(labs),'invalid labs'
 
-    assert n_stim_total >= (n_subj*n_trial), 'not enough trials'
+    if do_boot==0: assert n_stim_total >= (n_subj*n_trial), 'not enough trials'
+        
+    if subjs is not None:
+        u_subj = np.unique(subjs)
+        n_subj = len(u_subj)
+        n_trial = 1
 
     n_nb = len(nb_run)
     sd_bias_all = np.zeros((n_nb,2,n_gen,n_subj,n_bns)) # (sort stim/resp), (gen stim/resp/neither)
     fits_all_struct = pd.DataFrame()
     
     # iterate over different nb
-    for nbi,nb in enumerate(nb_run): 
-        if nb==0:
-            new_order = np.random.choice(n_stim_total,n_stim_total)
-            stim_use = stim[new_order]
-            resp_use = resp[:,new_order]
-            E_use = E[:,new_order]
-            nb_use = -1
-        else:
-            stim_use=stim
-            resp_use=resp
-            E_use=E
-            nb_use=nb
+    for si in range(n_subj):
         
-        d_ori = SDF.get_nb(nb_use,stim_use,1,ori_wrap)
-
-        
-        for i in range(n_gen): # stim bias/ resp bias/ none .. etc.
-            d_resp = ori_wrap(SDF.get_nb(nb_use,resp_use[i],0)-stim_use)
+        if subjs is not None:
+            subj = u_subj[si]
+            inds = (subjs==subj)
             
-            for si in range(n_subj):
+        else:
+            subj=si
+            if do_boot:
+                inds = np.random.choice(n_stim_total,n_trial,0)
+            else:
                 st_ind,end_ind = si*n_trial,(si+1)*n_trial
-                
-                if n_subj ==1:
-                    st_ind,end_ind = 0,len(stim)
-                    
-                inds = (np.arange(len(stim_use))>=st_ind)&(np.arange(len(stim_use))<end_ind)
+                if n_subj ==1: st_ind,end_ind = 0,len(stim)
+                inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
+            
+        for nbi,nb in enumerate(nb_run): 
+            if nb==0:
+                new_order = np.random.choice(n_stim_total,n_stim_total)
+                stim_use = stim[new_order]
+                resp_use = resp[:,new_order]
+                E_use = E[:,new_order]
+                nb_use = -1
+            else:
+                stim_use=stim
+                resp_use=resp
+                E_use=E
+                nb_use=nb
+
+            d_ori = SDF.get_nb(nb_use,stim_use,1,ori_wrap)
+
+            for i in range(n_gen): # stim bias/ resp bias/ none .. etc.
+                d_resp = ori_wrap(SDF.get_nb(nb_use,resp_use[i],0)-stim_use)
+            
                 if get_vis:
-                    sd_bias_all[nbi,0,i,si] = SDF.do_bining(bns,overlap,d_ori[st_ind:end_ind],
-                                                        E_use[i,st_ind:end_ind]*d2r*2,'circ_mean')/d2r/2
-                    sd_bias_all[nbi,1,i,si] = SDF.do_bining(bns,overlap,d_resp[st_ind:end_ind],
-                                                        E_use[i,st_ind:end_ind]*d2r*2,'circ_mean')/d2r/2
+                    sd_bias_all[nbi,0,i,si] = SDF.do_bining(bns,overlap,d_ori[inds],
+                                                        E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
+                    sd_bias_all[nbi,1,i,si] = SDF.do_bining(bns,overlap,d_resp[inds],
+                                                        E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
 
-                fit_ori = fit_history_fun(d_ori[st_ind:end_ind]*d2r*2,E_use[i,st_ind:end_ind],want_full=1,typ=fit_typ)
-                fit_resp = fit_history_fun(d_resp[st_ind:end_ind]*d2r*2,E_use[i,st_ind:end_ind],want_full=1,typ=fit_typ)
+                fit_ori = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
+                fit_resp = fit_history_fun(d_resp[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
 
-                fit_joint = fit_history_fun(d_ori[st_ind:end_ind]*d2r*2,E_use[i,st_ind:end_ind],want_full=1,typ=fit_typ,
-                    x2=d_resp[st_ind:end_ind]*d2r*2)
+                fit_joint = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ,
+                    x2=d_resp[inds]*d2r*2)
 
                 dicts = []
-                dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_ori','amp':fit_ori.x[0]
+                dicts.append({'subj':subj,'nb':nb,'trueSD':labs[i],'dStim':'d_ori','amp':fit_ori.x[0]
                               ,'width':fit_ori.x[1],'success':fit_ori.success})
-                dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_resp','amp':fit_resp.x[0],
+                dicts.append({'subj':subj,'nb':nb,'trueSD':labs[i],'dStim':'d_resp','amp':fit_resp.x[0],
                               'width':fit_resp.x[1],'success':fit_resp.success})
-                dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_ori','amp':fit_joint.x[0],
+                dicts.append({'subj':subj,'nb':nb,'trueSD':labs[i],'dStim':'joint_ori','amp':fit_joint.x[0],
                               'width':fit_joint.x[1],
                               'success':fit_resp.success})
-                dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_resp','amp':fit_joint.x[2],
+                dicts.append({'subj':subj,'nb':nb,'trueSD':labs[i],'dStim':'joint_resp','amp':fit_joint.x[2],
                               'width':fit_joint.x[3],
                               'success':fit_resp.success})                 
-
                 for s in dicts:
                     fits_all_struct = fits_all_struct.append(s,ignore_index=1)
 
@@ -452,7 +567,6 @@ def vis_bias(bias_all,nb_use,stats=None,
     Visualize biases of model.
     """
 
-    
     n_nb,n_sort_E,n_gen,n_subj,n_bin = bias_all.shape
     if labs is None:
         if n_gen==3:
@@ -513,6 +627,6 @@ def vis_bias(bias_all,nb_use,stats=None,
                     plt.annotate('%s AutoCorr' %(('Not','(+)','(-)')[do_stim_autocorr]),(-85,-yl+2))
                     plt.annotate('%s CB %s Oblique' %(('No','Yes','Saw')[do_cb],('No','Yes')[do_oblique]),(-85,-yl+4))
     plt.tight_layout()
-    plt.show()
+#     plt.show()
             
     
