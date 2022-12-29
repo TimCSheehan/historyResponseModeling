@@ -124,18 +124,16 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     do_cb      | int (flag), 0- no CB, 1- sine based CB, 2- sawtooth based CB
     do_oblique | int (flag), 0- no oblique bias, 1- include cosine modulation of kappa
     do_stim_autocorr | int (flag), 0- none, 1- pos autocorr, 2- neg autocorr
-    do_cb_correction | int (flag), 1-oracle sine, 2-oracle sawtooth, 3- fit fourier
+    
     bias_mag   | bias mag used by cb function
     adapt_amp  | (float, flag) used to introduce a repulsive bias from previous stim at encoding.
 
     
     
-    return ((stim, response, E,),(stim, cResponse, cE))  
-    response/E (3, n_stim) corresponding to [stim, response, and no bias]
-    
-    Do:
-    Run simulation 
-    
+    return ((stim, response, E)
+    stim       (n_stim)
+    response,E (3, n_stim) corresponding to {stim, response, and no} serial dependence
+       
     
     """
     kappa_prior = kappa*1.5
@@ -205,22 +203,31 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     return stim,resp_all_cb,E_all
 
 
-def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_trial=0,subjs=None):
+def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',
+               n_subj=0,n_trial=0,subjs=None):
     """
     Corrects cardinal or any other circular response bias. 
     
+    INPUTS:
     stim   | [0, 180] (n_stim)
     resp   | [0, 180] (n_sim, n_stim)
     E      | [-90,90] (n_sim, n_stim)
     c_fun  | (str)
                 fourier - many_sine_cos function. flexible # of parameters
                 poly - fit polynomial
+                sawtooth - 4 parameter sawtooth function
+                
     n_param | (Scalar, int)
-    mode    | (str)
+    mode    | (str) controls what is returned
                 'All'       - return resp_corrected,E_corrected
                 'resp'      - stim,resp_corrected, E_corrected
                 'E'         - stim,resp,E_corrected
                 'fit_fun'   - fit_mdl,sliding_bias
+                
+                
+    n_subj  | (int, flag) [0] if included, number of subjects to run correction over
+    n_trial | (int, flag) [0] if included, number of trials/subject to run correction over
+    subjs   | (str, listlike) [None] if included, subject IDs to iterate correction over
     """
 
     if resp.ndim==1:
@@ -304,102 +311,6 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',n_subj=0,n_tri
             sliding_bias[i+1] = SDF.do_bining(bns+90,overlap,stim,E_corrected[i])
         return fit_mdl,sliding_bias
 
-
-# def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,labs = None,
-#     fit_typ = 'DoVM',do_boot=0):
-#     """
-#     Returns parameterized estimates of bias from stim and resp/E. 
-
-#     stim   | [0, 180]
-#     resp   | [0, 180] 
-#     nb_run | list like, 0- shuffle
-#     n_subj | for power analysis. If 1 just do one fit of all data...
-#     n_trial| per subject
-#     get_vis| return sliding avg bias 
-#     labs   | labels corresponding to rows of resp/E
-#     fit_typ| options: DoVM (default), DoG.
-#     """
-#     if resp.ndim==1:
-#         resp = np.expand_dims(resp,0)
-#     if E.ndim==1:
-#         E = np.expand_dims(E,0)
-    
-#     n_stim_total = len(stim)
-#     n_gen = resp.shape[0]
-#     if labs is None:
-#         if n_gen==3:
-#             labs = ('Stim SD','Resp SD','No SD')
-#         elif n_gen==4:
-#             labs = ('Stim SD','Resp SD','StimResp SD','No SD')
-#     else:
-#         assert n_gen==len(labs),'invalid labs'
-
-#     if do_boot==0: assert n_stim_total >= (n_subj*n_trial), 'not enough trials'
-
-#     n_nb = len(nb_run)
-#     sd_bias_all = np.zeros((n_nb,2,n_gen,n_subj,n_bns)) # (sort stim/resp), (gen stim/resp/neither)
-#     fits_all_struct = pd.DataFrame()
-    
-#     # iterate over different nb
-#     for nbi,nb in enumerate(nb_run): 
-#         if nb==0:
-#             new_order = np.random.choice(n_stim_total,n_stim_total)
-#             stim_use = stim[new_order]
-#             resp_use = resp[:,new_order]
-#             E_use = E[:,new_order]
-#             nb_use = -1
-#         else:
-#             stim_use=stim
-#             resp_use=resp
-#             E_use=E
-#             nb_use=nb
-        
-#         d_ori = SDF.get_nb(nb_use,stim_use,1,ori_wrap)
-        
-#         for i in range(n_gen): # stim bias/ resp bias/ none .. etc.
-#             d_resp = ori_wrap(SDF.get_nb(nb_use,resp_use[i],0)-stim_use)
-            
-#             for si in range(n_subj):
-#                 if do_boot:
-#                     inds = np.random.choice(n_stim_total,n_trial,0)
-#                 else:
-#                     st_ind,end_ind = si*n_trial,(si+1)*n_trial
-#                     if n_subj ==1:
-#                         st_ind,end_ind = 0,len(stim)
-#                     inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
-                
-#                 if get_vis:
-#                     sd_bias_all[nbi,0,i,si] = SDF.do_bining(bns,overlap,d_ori[inds],
-#                                                         E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
-#                     sd_bias_all[nbi,1,i,si] = SDF.do_bining(bns,overlap,d_resp[inds],
-#                                                         E_use[i,inds]*d2r*2,'circ_mean')/d2r/2
-
-#                 fit_ori = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
-#                 fit_resp = fit_history_fun(d_resp[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ)
-
-#                 fit_joint = fit_history_fun(d_ori[inds]*d2r*2,E_use[i,inds],want_full=1,typ=fit_typ,
-#                     x2=d_resp[inds]*d2r*2)
-
-#                 dicts = []
-#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_ori','amp':fit_ori.x[0]
-#                               ,'width':fit_ori.x[1],'success':fit_ori.success})
-#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'d_resp','amp':fit_resp.x[0],
-#                               'width':fit_resp.x[1],'success':fit_resp.success})
-#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_ori','amp':fit_joint.x[0],
-#                               'width':fit_joint.x[1],
-#                               'success':fit_resp.success})
-#                 dicts.append({'subj':si,'nb':nb,'trueSD':labs[i],'dStim':'joint_resp','amp':fit_joint.x[2],
-#                               'width':fit_joint.x[3],
-#                               'success':fit_resp.success})                 
-#                 for s in dicts:
-#                     fits_all_struct = fits_all_struct.append(s,ignore_index=1)
-
-#     if get_vis:
-#         return fits_all_struct, sd_bias_all
-#     else:
-#         return fits_all_struct
-    
-    
 def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,labs = None,
     fit_typ = 'DoVM',do_boot=0,subjs=None):
     """
