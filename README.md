@@ -1,11 +1,14 @@
 # histroryResponseModeling
-Modeling work to establish ability to distinguish stimulus versus response histroy biases.
+Modeling work to establish ability to distinguish stimulus versus response histroy biases. Includes empirical analysis to demonstrate applicability to real world data.
 
-To quickly run, download or clone repo and run notebooks within folder. Questions, comments, or thoughts on expanding? Contact Timothy Sheehan tsheehan@ucsd.edu.
+To run code: download or clone repo and run notebooks within folder. 
+
+Questions, comments, or thoughts on expanding? Contact Timothy Sheehan <tsheehan@ucsd.edu>.
 
 ## Modules
 *responseModel.py*
 - run simulation, visualize and quantify biases.
+
 *SD_functions.py*
 - helper functions for measuring and visualizing history biases
 
@@ -16,4 +19,5 @@ To quickly run, download or clone repo and run notebooks within folder. Question
 
 ## Folders
 **/Figs** Raw figures used in manuscript
+
 **/data** Contains .csv file of experiment used in empirical analysis
