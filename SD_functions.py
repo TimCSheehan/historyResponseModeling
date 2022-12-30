@@ -35,10 +35,6 @@ def Sd_vm(p,x): # scaled von mises
     denom = d_vm(w,peak_val)
     return a*unscaled/denom
     
-def min_fun_doVM(p,vals):
-    x_min,y = vals
-    bias = Sd_vm(p,x_min)
-    return np.sqrt(np.sum(wrap(y - bias)**2))
 
 #- Gaussian
 def DoG(p,x_min_deg):
@@ -51,8 +47,9 @@ def min_fun_dog(p,vals):
     return np.sqrt(np.sum(wrap(y - bias)**2))
 
 def many_sine_cos(p,x):
-    # this is the best one, essentially a fourier decomp/ steerable filters.
+    # this is the best one, essentially a fourier decomp/ steerable filter.
     # p should be even number, all initialized at (0,)
+    # x should range [0, 2pi] or [pi, pi]
     y_hat = np.zeros_like(x)
     for p_ind,amp in enumerate(p):
         if np.mod(p_ind,2)==0: # cos
@@ -72,10 +69,7 @@ def many_VM(p,x):
     for di in range(n_vm):
         y+= Sd_vm(p[(di*2):(di*2)+2],x[di])
     return y
-def min_fun_many_VM(p,vals):
-    x_min,y = vals
-    bias = many_VM(p,x_min)
-    return np.sqrt(np.mean(wrap(y - bias )**2))
+
 
 def many_DoG(p,x):
     n_dog = len(p)//2
@@ -86,10 +80,10 @@ def many_DoG(p,x):
     for di in range(n_dog):
         y+= DoG(p[(di*2):(di*2)+2],x[di])
     return y
-def min_fun_many_dog(p,vals):
-    x_min,y = vals
-    bias = many_DoG(p,x_min)
-    return np.sqrt(np.mean(wrap(y - bias )**2))
+# def min_fun_many_dog(p,vals):
+#     x_min,y = vals
+#     bias = many_DoG(p,x_min)
+#     return np.sqrt(np.mean(wrap(y - bias )**2))
 
 # account for cardinal biases.
 def sine5(amps,x): 

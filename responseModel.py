@@ -20,11 +20,11 @@ ori_wrap = lambda x: SDF.wrap(x*2)/2 # wraps -90,90
 
 doVM_loss = SDF.rss_fun(SDF.Sd_vm) # fitting DoG
 
-def get_labs(n_gen):
-    if n_gen==3:
-        return ('Stim SD','Resp SD','No SD')
-    elif n_gen==4:
-        return ('Stim SD','Resp SD','StimResp SD','No SD')
+# def get_labs(n_gen):
+#     if n_gen==3:
+#         return ('Stim SD','Resp SD','No SD')
+#     elif n_gen==4:
+#         return ('Stim SD','Resp SD','StimResp SD','No SD')
 
 def sawtooth(p,x):
     """
@@ -133,10 +133,9 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     return ((stim, response, E)
     stim       (n_stim)
     response,E (3, n_stim) corresponding to {stim, response, and no} serial dependence
-       
-    
     """
-    kappa_prior = kappa*1.5
+    
+    kappa_prior = kappa*1.5  # uniform precision
     #### generate stimulus sequence ####
     if do_stim_autocorr==1:
         ac_fun = cf(s_0,90,1,.7)
@@ -144,14 +143,12 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     elif do_stim_autocorr==2:
         ac_fun = cf(s_0,0,1,.7)
         stim = gen_seq_from_pdf(s_0,ac_fun,n_stim,0)
-    elif do_stim_autocorr==0:
+    elif do_stim_autocorr==0: # default
         stim = np.linspace(0,180,n_stim)
         np.random.shuffle(stim)
 
     ####  kappa ####    
     if do_oblique:
-        # cb_fun_kappa = lambda x: kappa+kappa*np.cos(x*d2r*2)**2
-        # kappas = cb_fun_kappa(stim)
         kappas = cb_fun_kappa(stim,kappa)
         stim_enc_cb = vonMises_ori(stim,kappas)
     else:
@@ -160,7 +157,6 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
 
     #### mu #####
     if do_cb==1:
-        # cb_fun_bias = lambda x: cb_bias_mag*(np.sin(x*d2r*2*2))
         stim_enc_cb += cb_fun_bias(stim,cb_bias_mag)
     elif do_cb==2:
         cb_fun_sawtooth_bias = lambda x: sawtooth((5*d2r,cb_bias_mag),x)
@@ -178,7 +174,7 @@ def run_simulation(n_stim=20000,kappa=8,do_cb=1,do_oblique=1,
     inc_joint,n_resp_types = 0,3
 
     resp_all_cb = np.zeros((n_resp_types,n_stim)) # stim\resp bias
-    resp_all_cb[-1] = stim_enc_cb
+    resp_all_cb[-1] = stim_enc_cb # no bias condition
 
     #### Bayesian integration  ####
     for i in range(n_stim):
@@ -271,7 +267,7 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',
         if c_fun=='poly':
             assert 0, 'not setup right!'
             for i in range(n_stim):
-                pfit = np.polyfit(stim,E[i],n_param) # Fix, want many_sine_cos
+                pfit = np.polyfit(stim,E[i],n_param) 
                 fit_mdl = lambda stim: np.poly1d(pfit)(stim)
                 rss_fit = 0
 
@@ -318,7 +314,7 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
 
     stim   | [0, 180]
     resp   | [0, 180] 
-    nb_run | list like, 0- shuffle
+    nb_run | list like, (-1)- influence of previous trial; (0)- shuffle; (1)- influence of future trial
     n_subj | for power analysis. If 1 just do one fit of all data...
     n_trial| per subject
     get_vis| return sliding avg bias 
@@ -463,7 +459,7 @@ def fit_history_fun(x,y,typ='DoVM',want_full=0,x2=None):
 
 
 ### visualization ###
-pal = ['k','c']
+pal = ['k','c'] # palette
 ALPHAS = np.array([0.05,.01,.001])
 def tt2stars(t_test):
     t,p = t_test
@@ -476,6 +472,15 @@ def vis_bias(bias_all,nb_use,stats=None,
              labs = None,yl=10.5,ann=(),set_fs = None):
     """
     Visualize biases of model.
+    
+    bias_all    |  (n_nb,n_sort_E,n_gen,n_subj,n_bin) sliding average bias.
+                |  Corresponds to second output 'sd_bias_all' from RM.summarize_stim  
+    nb_use      |  also input to sd_bias all. used for labeling plots. must be same length as (n_nb)
+    stats       |  structure with parameterization of bias. Used to include stats. 'fits_all_struct' from RM.summarize_stim
+    labs        |  labels for different responses. must be same length as (n_gen)
+    yl          |  shared symmetric ylimit for all plots
+    ann         |  listlike Boolean used for annotating figure. Specific to simulations. If included, must be 5 elements long
+    set_fs      |  (width, height). Total figure size.
     """
 
     n_nb,n_sort_E,n_gen,n_subj,n_bin = bias_all.shape
@@ -538,6 +543,3 @@ def vis_bias(bias_all,nb_use,stats=None,
                     plt.annotate('%s AutoCorr' %(('Not','(+)','(-)')[do_stim_autocorr]),(-85,-yl+2))
                     plt.annotate('%s CB %s Oblique' %(('No','Yes','Saw')[do_cb],('No','Yes')[do_oblique]),(-85,-yl+4))
     plt.tight_layout()
-#     plt.show()
-            
-    
