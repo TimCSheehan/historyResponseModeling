@@ -1,5 +1,5 @@
 # histroryResponseModeling
-Modeling work to establish ability to distinguish stimulus versus response histroy biases. Includes empirical analysis to demonstrate applicability to real world data.
+Modeling work to establish ability to distinguish stimulus versus response biases. Includes empirical analysis to demonstrate applicability to real world data.
 
 To run code: download or clone repo and run notebooks within folder. 
 
