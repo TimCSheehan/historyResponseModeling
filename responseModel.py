@@ -308,7 +308,7 @@ def correct_cb(stim,resp,E,c_fun = 'fourier',n_param=6,mode='All',
         return fit_mdl,sliding_bias
 
 def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,labs = None,
-    fit_typ = 'DoVM',do_boot=0,subjs=None):
+    fit_typ = 'DoVM',do_boot=0,subjs=None,subj_shuffle=0):
     """
     Returns parameterized estimates of bias from stim and resp/E. 
 
@@ -320,6 +320,9 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
     get_vis| return sliding avg bias 
     labs   | labels corresponding to rows of resp/E
     fit_typ| options: DoVM (default), DoG.
+    do_boot| opt to bootstrap trials within or across participants
+    subjs  | list like, subject IDs.
+    subj_shuffle | do shuffling within subjects.
     """
     if resp.ndim==1:
         resp = np.expand_dims(resp,0)
@@ -340,32 +343,56 @@ def summarize_sim(stim,resp,E,nb_run = (-1,0),n_subj=30,n_trial = 360,get_vis=0,
         
     if subjs is not None:
         u_subj = np.unique(subjs)
-        n_subj = len(u_subj)
-        n_trial = 1
+#         n_subj = len(u_subj)
+        # n_trial = 1 # not-necessary?
 
+    if subj_shuffle:
+         assert subjs is not None, 'cannot do this mode w/o subjs'
     n_nb = len(nb_run)
     sd_bias_all = np.zeros((n_nb,2,n_gen,n_subj,n_bns)) # (sort stim/resp), (gen stim/resp/neither)
     fits_all_struct = pd.DataFrame()
     
     # iterate over different nb
     for si in range(n_subj):
-        
-        if subjs is not None:
-            subj = u_subj[si]
-            inds = (subjs==subj)
-            
+        subj=si
+        if do_boot:
+            inds = np.random.choice(n_stim_total,n_trial,0)
         else:
-            subj=si
-            if do_boot:
-                inds = np.random.choice(n_stim_total,n_trial,0)
+            if subjs is not None:
+                subj = u_subj[si]
+                inds = (subjs==subj)
             else:
+                # if not boot and no subjs, just grab groups in order
                 st_ind,end_ind = si*n_trial,(si+1)*n_trial
                 if n_subj ==1: st_ind,end_ind = 0,len(stim)
                 inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
-            
+                
+#         # hemmed in here, have to do by subject if term is included...
+#         if subjs is not None:
+#             subj = u_subj[si]
+#             inds = (subjs==subj)
+#         else:
+#             subj=si
+#             if do_boot:
+#                 inds = np.random.choice(n_stim_total,n_trial,0)
+#             else:
+#                 st_ind,end_ind = si*n_trial,(si+1)*n_trial
+#                 if n_subj ==1: st_ind,end_ind = 0,len(stim)
+#                 inds = (np.arange(n_stim_total)>=st_ind)&(np.arange(n_stim_total)<end_ind)
+
+
         for nbi,nb in enumerate(nb_run): 
             if nb==0:
-                new_order = np.random.choice(n_stim_total,n_stim_total)
+                if subj_shuffle: # if we want to shuffle within subjects...
+                    new_order = np.zeros_like(stim).astype(int)
+                    for subj in u_subj:
+                        these_inds = np.where(subjs==subj)[0]
+                        these_inds_shuf = np.random.choice(these_inds,len(these_inds),replace=False)
+                        new_order[these_inds] = these_inds_shuf
+#                         new_order.append(these_inds_shuf)
+#                     new_order = np.concatenate(new_order)
+                else:
+                    new_order = np.random.choice(n_stim_total,n_stim_total)
                 stim_use = stim[new_order]
                 resp_use = resp[:,new_order]
                 E_use = E[:,new_order]
